@@ -425,7 +425,7 @@ Suggested migration waves derived from readiness score and production tagging.
 | where Lifecycle != 'OPTIONAL'
 // Environment is resolved through a cascade, because most fleets do not tag
 // every VM. The most specific signal wins, and the source is reported so the
-// customer can see which signal was used.
+// the signal it used is visible.
 //
 // A note on why this is not a tag-bag scan: the earlier `tostring(Tags) has
 // 'prod'` test was wrong in both directions. KQL `has` matches whole terms, so

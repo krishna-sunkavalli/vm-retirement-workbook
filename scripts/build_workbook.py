@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Build a customer-facing Azure Monitor Workbook for Azure VM lifecycle,
+Build a self-service Azure Monitor Workbook for Azure VM lifecycle,
 retirements and modernization readiness.
 
 Source of truth:
@@ -11,7 +11,7 @@ Output:
   out/azure-vm-retirement-workbook.json   (paste into Workbooks Advanced Editor)
   out/deploy-workbook.json                (ARM template, one-click deploy)
 
-CLASSIFICATION: customer-facing. Public facts only. No pricing percentages.
+SCOPE: public information only. No pricing percentages.
 """
 
 import json
@@ -40,15 +40,15 @@ ONLY_SIZES = None
 V3_EOL_GROUPS = {"Dv3_Dsv3", "Ev3_Esv3", "Isolated_E64i_v3"}
 V3_EOL_DATE = "2029-11-15"
 
-# Azure VM price update effective 2027-02-01, per the customer notification of
-# 28 Sep 2026. The increase is scoped by SIZE SERIES, not by region: it applies
+# Azure VM price update effective 2027-02-01, per the Azure Service Health
+# notification of 28 Sep 2026. The increase is scoped by SIZE SERIES, not by region: it applies
 # across Azure public cloud and Azure operated by 21Vianet, and exempts only
 # Azure Government and Azure Sovereign Cloud.
 #
 # Series names below are the catalogue's, mapped from the names used in the
 # notification (for example "Bv1" covers Bsv1/Bmsv1/Blsv1, and "D"/"Ds" are
 # Dv1/Dsv1 here). The workbook reports only that an update applies - the
-# percentage is communicated to each customer through their own Azure Service
+# percentage is communicated to each tenant through its own Azure Service
 # Health notification, and is deliberately not restated here.
 PRICE_SERIES = {
     # notification "v1": Bv1, D, Ds, F, Fs, G, Gs, Ls, NP, HC
@@ -103,7 +103,7 @@ PENALTY = {
 }
 
 # Prerequisite copy, keyed by warning code. Derived from readiness-checklist.json
-# and kept customer-safe.
+# and kept to public information.
 PREREQ = {
     "gen1_not_supported": {
         "title": "Generation 1 to Generation 2 (BIOS to UEFI) conversion",
@@ -258,7 +258,7 @@ def build_lookups(data):
         else:
             tier = "OPTIONAL"
 
-        # Pricing update flag: scoped to the series named in the customer
+        # Pricing update flag: scoped to the series named in the Service Health
         # notification, not to every v1/v2 generation size. The generation
         # field alone over-matches (it pulls in M-series isolated and HBrs).
         price = "1" if (r.get("series") or "") in PRICE_SERIES else "0"
@@ -488,7 +488,7 @@ def arg_query(query, name, visualization="table", size=0, title=None,
     if tile:
         content["tileSettings"] = tile
     # Grids can offer a "Download to Excel" toolbar button. Enabled on the
-    # detailed tables so a customer can take the inventory into their own
+    # detailed tables so the inventory can be taken into your own
     # planning spreadsheet; "all" exports every column, not just visible ones,
     # which matters because several prose columns are truncated on screen.
     if export:
@@ -1042,7 +1042,7 @@ def build(data):
         base_impacted + f"""
 // Environment is resolved through a cascade, because most fleets do not tag
 // every VM. The most specific signal wins, and the source is reported so the
-// customer can see which signal was used.
+// the signal it used is visible.
 //
 // A note on why this is not a tag-bag scan: the earlier `tostring(Tags) has
 // 'prod'` test was wrong in both directions. KQL `has` matches whole terms, so
@@ -1199,7 +1199,7 @@ def build(data):
         "**Lifecycle and pricing changes.** A pricing update takes effect **1 February 2027** "
         "for selected v1 and v2 size series. The workbook flags which of your series are in "
         "scope; it does not restate the rate change, because the applicable figures are "
-        "communicated to each customer through their own Azure Service Health notification "
+        "communicated to each tenant through its own Azure Service Health notification "
         "and depend on the agreement. For authoritative rates see the official "
         "[Windows](https://azure.microsoft.com/pricing/details/virtual-machines/windows/) and "
         "[Linux](https://azure.microsoft.com/pricing/details/virtual-machines/linux/) VM "

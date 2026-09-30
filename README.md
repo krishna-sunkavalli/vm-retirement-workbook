@@ -2,7 +2,7 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-A customer-deployable Azure Monitor Workbook that inventories a customer's VM fleet,
+A self-service Azure Monitor Workbook that inventories your VM fleet,
 flags every size affected by announced Azure VM retirements and lifecycle changes,
 recommends a target size for each, scores migration readiness against the fleet's
 **actual** configuration, and lists the prerequisite work each move requires.
@@ -19,7 +19,7 @@ Gen1 VMs, one Gen2 VM and one v3 end-of-life VM.</sub>
 
 ---
 
-## What the customer gets
+## What you get
 
 | Tab | Contents |
 | --- | --- |
@@ -140,7 +140,7 @@ through a cascade and the workbook reports which signal it used:
 Values are normalised, so `non-prod`, `non_prod` and `nonprod` read alike.
 
 **Anything the cascade cannot resolve is sequenced as production.** Guessing the
-other way puts a production VM into a wave the customer was told carries no
+other way puts a production VM into a wave described as carrying no
 business risk.
 
 If a fleet has no environment signal at all, every low-complexity workload lands
@@ -198,7 +198,7 @@ can audit exactly what executes against your tenant before you deploy.
 
 There is no built-in "export the whole workbook to PDF" - that is a long-standing
 Workbooks gap rather than something this workbook can add. For a point-in-time
-artifact to send to a customer, the Excel export per grid is the reliable path.
+artifact you can share, the Excel export per grid is the reliable path.
 
 ---
 
@@ -328,9 +328,9 @@ Modelled on the official Advisor *Azure Services Retirement* workbook
 
 ---
 
-## Classification
+## Sources and scope
 
-**Customer-facing. Public facts only.**
+**Public information only.**
 
 Included: announced retirement dates and migration targets; the v3
 (Dv3/Dsv3/Ev3/Esv3) End-of-Life status with its 15 November 2029 retirement date;
@@ -339,15 +339,14 @@ update; and the Reserved Instance purchase and renewal end date of 1 July 2026
 ([Azure update 560948](https://azure.microsoft.com/updates?id=560948)).
 
 Deliberately excluded: the rate-change percentage. The increase is scoped by
-size series, and the applicable figures reach each customer through their own
-Azure Service Health notification and depend on their agreement. Restating a
-single percentage in a template deployed into arbitrary tenants would be a
-generalized bill-impact claim, so the workbook flags *which* series are in scope
-and points at the official
+size series, and the applicable figures depend on your agreement and reach each
+tenant through its own Azure Service Health notification. Restating a single
+percentage in a template that deploys into any tenant would be a generalized
+bill-impact claim, so the workbook flags *which* series are in scope and points
+at the official
 [Windows](https://azure.microsoft.com/pricing/details/virtual-machines/windows/)
 and [Linux](https://azure.microsoft.com/pricing/details/virtual-machines/linux/)
-VM pricing pages for rates. Internal field and partner collateral is likewise
-excluded.
+VM pricing pages for rates.
 
 The v3 retirement and the lifecycle policy became public on **28 September 2026**
 via the [Azure blog](https://azure.microsoft.com/blog/enhancing-microsoft-azure-virtual-machine-lifecycle/)
