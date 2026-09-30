@@ -1,0 +1,38 @@
+# Build scratch. The published, committed copies live in workbook/ -
+# workbook/azuredeploy.json is what the Deploy to Azure button resolves.
+out/_preview*
+out/*-preview.json
+out/base-query.kql
+
+# Ad-hoc verification screenshots (docs/images is tracked)
+out/*.png
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+
+# Editors / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Local dev scratch - machine-specific paths and tenant identifiers
+scripts/find_edge_profile.py
+scripts/serve_out.py
+
+# Local screenshot tooling - clones a browser profile, machine-specific
+scripts/shoot_workbook.py
+out/azure-vm-retirement-workbook.json
+out/deploy-workbook.json
+
+# Start Right governance files belong to the internal mcaps-microsoft repo.
+# They reference Microsoft-only endpoints (eng.ms, aka.ms/gim) and list
+# employee aliases, so they are not published to the public repo.
+.github/acl/
+.github/compliance/
+.github/policies/
+.github/ISSUE_TEMPLATE/
