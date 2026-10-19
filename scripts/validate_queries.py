@@ -1,12 +1,14 @@
 #!/usr/bin/env python3
-"""Run every Azure Resource Graph query in the generated workbook against the
-live ARG service and report pass/fail. Requires `az login` + resource-graph ext."""
+"""Check deployment artifacts and run every generated query against live ARG.
+Use --offline without Azure; live checks require az login + resource-graph ext."""
 
 import json
 import os
 import subprocess
 import sys
 import tempfile
+
+from build_workbook import LOOKUP_PARAMETERS, WORKBOOK_SIZE_LIMIT, expand_lookups, lookup_values
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 OUT = os.path.join(os.path.dirname(HERE), "out")
@@ -62,6 +64,12 @@ def structure_check(wb):
     for required in ("Subscriptions", "LifecycleFilter"):
         if required not in params:
             problems.append(f"missing parameter {required}")
+    lookups = lookup_values(wb)
+    for name in LOOKUP_PARAMETERS:
+        if name not in lookups:
+            problems.append(f"missing shared lookup {name}")
+    if len(json.dumps(wb, separators=(",", ":")).encode("utf-8")) >= WORKBOOK_SIZE_LIMIT:
+        problems.append("workbook exceeds the saved-workbook size limit")
 
     # Every ARG query must be scoped and must not reference undefined parameters.
     found = []
@@ -90,22 +98,42 @@ def structure_check(wb):
 
 
 def main():
+    import argparse
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--offline", action="store_true",
+                        help="Check structure and published deployment artifacts without Azure.")
+    args = parser.parse_args()
     wb = json.load(open(WB, encoding="utf-8"))
 
-    print("Structural checks")
     problems = structure_check(wb)
-    for p in problems:
-        print(f"  FAIL  {p}")
+    root = os.path.dirname(HERE)
+    with open(os.path.join(root, "workbook", "azuredeploy.json"), encoding="utf-8") as f:
+        template = json.load(f)
+    resource = template["resources"][0]
+    with open(os.path.join(root, "workbook", "vm-lifecycle-readiness.workbook"),
+              encoding="utf-8") as f:
+        published = json.load(f)
+    if json.loads(resource["properties"]["serializedData"]) != wb or published != wb:
+        problems.append("published workbook/template differ from the generated workbook")
+    if resource["properties"]["version"] != wb["version"]:
+        problems.append("ARM workbook version differs from the serialized workbook")
+    if len(json.dumps(resource).encode("utf-8")) >= WORKBOOK_SIZE_LIMIT:
+        problems.append("ARM workbook resource exceeds 1 MB")
+    print("Structure and deployment artifact checks")
+    for problem in problems:
+        print(f"  FAIL  {problem}")
     if not problems:
-        print("  PASS  tabs, groups, parameters and query scoping are consistent")
-    print()
+        print("  PASS  size limits, artifact parity, versions, tabs, parameters and query scoping")
+    if args.offline or problems:
+        return 1 if problems else 0
 
     queries = []
     walk(wb, queries)
-    print(f"Found {len(queries)} Azure Resource Graph queries\n")
+    print(f"\nFound {len(queries)} Azure Resource Graph queries\n")
 
     failures = 0
     for name, q in queries:
+        q = expand_lookups(q, wb)
         for a, b in SUBSTITUTIONS.items():
             q = q.replace(a, b)
         with tempfile.NamedTemporaryFile("w", suffix=".kql", delete=False,

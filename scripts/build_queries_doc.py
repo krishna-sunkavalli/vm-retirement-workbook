@@ -2,12 +2,14 @@
 
 Every Azure Resource Graph query the workbook runs is extracted verbatim, so
 readers can audit exactly what is executed against their tenant without opening
-the 1.3 MB workbook JSON. The embedded lifecycle lookup literal is elided - it
+the workbook JSON. The expanded lifecycle lookup literal is elided - it
 is a 84 KB machine-generated dynamic bag, not something a human reads.
 """
 import json
 import os
 import re
+
+from build_workbook import expand_lookups
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 WB = os.path.join(ROOT, "out", "azure-vm-retirement-workbook.json")
@@ -83,7 +85,7 @@ def main():
     queries = collect(wb["items"], [])
     os.makedirs(DOCS, exist_ok=True)
 
-    elided = {name: elide(c["query"]) for name, c in queries}
+    elided = {name: elide(expand_lookups(c["query"], wb)) for name, c in queries}
     # about-allsizes is a standalone coverage query, not part of the fleet
     # pipeline, so it would collapse the shared prefix to nothing.
     fleet = [q for n, q in elided.items() if n != "about-allsizes"]
@@ -128,12 +130,14 @@ def main():
         "## A note on the embedded lookup",
         "",
         "Azure Resource Graph supports neither `let` nor `datatable`, so the "
-        "628-size lifecycle catalogue is embedded in each query as a "
-        "`parse_json('{...}')` dynamic literal indexed by VM size. That literal is "
+        "628-size lifecycle catalogue is stored once in hidden text parameters. "
+        "Workbooks substitutes the parameters into each query before sending it "
+        "to ARG, producing a `parse_json('{...}')` dynamic literal indexed by VM size. That literal is "
         "about 84 KB and is elided throughout this document for readability. "
         "It is generated from `references/sku-migration-map.json`; warning codes are "
         "stored as single characters and region lists as hex indices into a shared "
-        "region table to keep the generated workbook near 1.3 MB rather than 3.5 MB.",
+        "region table. Sharing the lookups keeps the saved workbook below the "
+        "1 MB limit without removing any sizes or queries.",
         "",
         "The fields packed into each lookup record, in order:",
         "",

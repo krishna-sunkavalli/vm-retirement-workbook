@@ -242,9 +242,12 @@ New-AzResourceGroupDeployment `
 
 ### Permissions
 
-`Reader` on every subscription in scope. The workbook issues **read-only** Azure
-Resource Graph queries, writes nothing, needs no agent and no Log Analytics
-workspace, and no data leaves the tenant.
+To deploy, you need `Contributor` on the destination resource group (or a
+custom role permitting deployments and `Microsoft.Insights/workbooks/write`).
+`Reader` is sufficient to view queried resources, but not to deploy or save a
+workbook. To use the workbook, you need `Reader` on every subscription in scope.
+The workbook issues **read-only** Azure Resource Graph queries, writes nothing,
+needs no agent and no Log Analytics workspace, and no data leaves the tenant.
 
 If a subscription grants read on `virtualMachines` but not on `disks`, the OS-disk
 join returns nothing and those VMs show `VmGeneration = Unknown` with a 20-point
@@ -257,6 +260,8 @@ penalty and a "Confirm VM generation" prerequisite, rather than failing.
 ```bash
 python scripts/build_workbook.py      # regenerate workbook + ARM template
 python scripts/build_queries_doc.py   # regenerate docs/QUERIES.md
+python scripts/validate_queries.py --offline  # size, structure and published artifact checks
+python -m unittest discover -s scripts -p "test_*.py"  # offline regression tests
 python scripts/validate_queries.py    # structural checks + run all 15 queries live
 ```
 
@@ -266,7 +271,8 @@ and `workbook/vm-lifecycle-readiness.workbook`. The published ARM template is
 what the **Deploy to Azure** button resolves, so it must be committed for the
 button to work.
 
-`validate_queries.py` needs `az login` and the `resource-graph` CLI extension. It
+Without `--offline`, `validate_queries.py` needs `az login` and the
+`resource-graph` CLI extension. It
 verifies that tab links match group visibility conditions, that every query is
 scoped to `{Subscriptions}` and references only declared parameters, and that all
 15 Resource Graph queries execute successfully. Azure Resource Graph throttles
@@ -292,10 +298,17 @@ building from the authoring tree.
 ### Implementation notes
 
 Azure Resource Graph supports neither `let` nor `datatable`, so the lifecycle
-lookup is embedded in each query as a `parse_json('{...}')` dynamic literal indexed
-by VM size. To keep that literal small, warning codes are stored as single
-characters and region lists as hex indices into a shared region table, which cut
-the generated workbook from 3.5 MB to ~1.2 MB.
+lookup is used in each query as a `parse_json('{...}')` dynamic literal indexed
+by VM size. The lookup data is stored once in hidden workbook text parameters
+and substituted before queries are sent to ARG. Warning codes use single
+characters and region lists use hex indices into a shared region table.
+
+Earlier builds repeated the lookups in every chart, exceeding the saved-workbook
+size limit and failing with **"The workbook length is too large"** through both
+ARM deployment and Advanced Editor save. The shared lookups preserve the full
+628-size catalogue and all 15 queries while keeping the saved workbook below
+1 MB. Rebuilds fail if that limit is reached; use the current published template
+or workbook rather than an older downloaded copy.
 
 ### Layout conventions
 

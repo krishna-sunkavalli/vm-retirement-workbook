@@ -30,6 +30,8 @@ REFS = _LOCAL_REFS if os.path.exists(
 
 OUT = os.path.join(ROOT, "out")
 WORKBOOK_DIR = os.path.join(ROOT, "workbook")
+WORKBOOK_SIZE_LIMIT = 1_000_000
+LOOKUP_PARAMETERS = ("LifecycleSkuMap", "TargetRegionMap", "RegionIdMap")
 
 # Preview mode: restrict the embedded lookup to a named set of sizes so the
 # generated workbook is small enough to paste into the portal for visual review.
@@ -324,14 +326,31 @@ def kql_bag(d):
     return esc(json.dumps(d, separators=(",", ":"), sort_keys=True))
 
 
-def base_query(sku_map, tgt_regions, region_ids, include_optional=True):
+def lookup_values(workbook):
+    return {
+        p["name"]: p["value"]
+        for item in workbook["items"] if item.get("type") == 9
+        for p in item["content"]["parameters"]
+        if p["name"] in LOOKUP_PARAMETERS
+    }
+
+
+def expand_lookups(query, workbook):
+    for name, value in lookup_values(workbook).items():
+        query = query.replace("{" + name + "}", value)
+    return query
+
+
+def base_query(sku_map, tgt_regions, region_ids, include_optional=True,
+               use_lookup_parameters=False):
     """
     Core Azure Resource Graph query: fleet inventory joined to the lifecycle
     lookup, with a readiness score computed from real fleet attributes.
     """
-    m = kql_bag(sku_map)
-    reg = kql_bag(tgt_regions)
-    rids = kql_bag(region_ids)
+    if use_lookup_parameters:
+        m, reg, rids = ("{" + name + "}" for name in LOOKUP_PARAMETERS)
+    else:
+        m, reg, rids = (kql_bag(value) for value in (sku_map, tgt_regions, region_ids))
 
     opt_filter = "" if include_optional else "\n| where Lifecycle != 'OPTIONAL'"
 
@@ -579,7 +598,7 @@ def group_item(name, tab_value, items):
 
 def build(data):
     sku_map, spec_map, url_map, tgt_regions, region_ids = build_lookups(data)
-    base = base_query(sku_map, tgt_regions, region_ids)
+    base = base_query(sku_map, tgt_regions, region_ids, use_lookup_parameters=True)
     base_impacted = base + "\n| where Lifecycle != 'OPTIONAL'"
 
     prereq_bag = kql_bag({
@@ -648,6 +667,30 @@ def build(data):
             "style": "pills",
         },
         "name": "parameters",
+    })
+
+    # Store each large literal once. Workbooks expands these before sending KQL
+    # to ARG; repeating them in every chart exceeds the saved-workbook limit.
+    items.append({
+        "type": 9,
+        "content": {
+            "version": "KqlParameterItem/1.0",
+            "parameters": [
+                {
+                    "id": f"b0a1f2c3-4444-4a44-9c04-00000000000{i}",
+                    "version": "KqlParameterItem/1.0",
+                    "name": name,
+                    "type": 1,
+                    "isRequired": True,
+                    "isHiddenWhenLocked": True,
+                    "value": kql_bag(value),
+                }
+                for i, (name, value) in enumerate(zip(
+                    LOOKUP_PARAMETERS, (sku_map, tgt_regions, region_ids)), 1)
+            ],
+            "style": "pills",
+        },
+        "name": "lookup-parameters",
     })
 
     tabs = [("Overview", "overview"), ("Impacted resources", "impacted"),
@@ -1285,6 +1328,9 @@ def build(data):
 
 
 def arm_template(workbook):
+    serialized = json.dumps(workbook, separators=(",", ":"))
+    if len(serialized.encode("utf-8")) >= WORKBOOK_SIZE_LIMIT:
+        raise ValueError("Workbook exceeds the saved-workbook size limit")
     return {
         "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
         "contentVersion": "1.0.0.0",
@@ -1308,8 +1354,8 @@ def arm_template(workbook):
             "kind": "shared",
             "properties": {
                 "displayName": "[parameters('workbookDisplayName')]",
-                "serializedData": json.dumps(workbook),
-                "version": "1.0",
+                "serializedData": serialized,
+                "version": workbook["version"],
                 "sourceId": "azure monitor",
                 "category": "workbook",
             },
